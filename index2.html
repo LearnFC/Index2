@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Manufacturing Task Entry Form</title>
+
+  <!-- Tailwind CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet"/>
+
+  <!-- EmailJS -->
+  <script src="https://cdn.emailjs.com/dist/email.min.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      emailjs.init("3exS7yhKaPEqmuNgn"); // ✅ Correct User ID
+    });
+  </script>
+
+  <!-- Custom Font -->
+  <style>
+    @font-face {
+      font-family: 'AbadiExtraLight';
+      src: url('./AbadiExtraLight.ttf') format('truetype');
+      font-weight: 300;
+      font-style: normal;
+    }
+    body {
+      font-family: 'AbadiExtraLight', sans-serif;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="root"></div>
+
+  <script type="module">
+    import React, { useState, useEffect } from "https://cdn.skypack.dev/react";
+    import ReactDOM from "https://cdn.skypack.dev/react-dom";
+
+    function DateTimeDisplay() {
+      const [now, setNow] = useState(new Date());
+      useEffect(() => {
+        const timer = setInterval(() => setNow(new Date()), 1000);
+        return () => clearInterval(timer);
+      }, []);
+      const formattedDate = now.toLocaleDateString(undefined, {
+        weekday: "long", year: "numeric", month: "long", day: "numeric"
+      });
+      const formattedTime = now.toLocaleTimeString(undefined, {
+        hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true
+      });
+      return React.createElement("div", { className: "text-center text-gray-700 text-sm mb-4 font-bold" },
+        `${formattedDate} | ${formattedTime}`);
+    }
+
+    const fields = [
+      "date", "employeeId", "workOrderId", "orderQuantity", "productCategory",
+      "productDescription", "size", "unit", "taskDescription", "equipment",
+      "manHours", "machineHours", "taskQuantityCompleted", "taskRemainingQuantity",
+      "department", "drawingId", "notes", "taskType"
+    ];
+
+    const labelMap = {
+      date: "Date", employeeId: "Employee ID", workOrderId: "Work Order ID",
+      orderQuantity: "Order Quantity", productCategory: "Product Category",
+      productDescription: "Product Description", size: "Size", unit: "Unit",
+      taskDescription: "Task Description", equipment: "Equipment",
+      manHours: "Man Hours", machineHours: "Machine Hours",
+      taskQuantityCompleted: "Task Quantity Completed",
+      taskRemainingQuantity: "Task Remaining Quantity",
+      department: "Department", drawingId: "Drawing ID",
+      notes: "Notes", taskType: "Task Type"
+    };
+
+    function DataEntryForm() {
+      const [formData, setFormData] = useState({ manHoursUnit: "Hours", machineHoursUnit: "Hours" });
+      const [entries, setEntries] = useState(() => {
+        const stored = localStorage.getItem("entries");
+        return stored ? JSON.parse(stored) : [];
+      });
+      const [isOperator, setIsOperator] = useState(false);
+
+      useEffect(() => {
+        localStorage.setItem("entries", JSON.stringify(entries));
+      }, [entries]);
+
+      const handleChange = (field, value) => {
+        setFormData((prev) => ({ ...prev, [field]: value }));
+      };
+
+      const handleSubmit = (e) => {
+        e.preventDefault();
+        const required = ["date", "employeeId", "workOrderId", "taskDescription", "taskType"];
+        for (let field of required) {
+          if (!formData[field]) {
+            alert(`Please fill out the "${labelMap[field]}" field.`);
+            return;
+          }
+        }
+        setEntries([...entries, formData]);
+        setFormData({ manHoursUnit: "Hours", machineHoursUnit: "Hours" });
+        alert("Entry saved successfully!");
+      };
+
+      const sendSummaryByEmail = () => {
+        const toEmail = prompt("Enter recipient email address (To):");
+        if (!toEmail || !toEmail.includes("@")) {
+          alert("Invalid recipient email.");
+          return;
+        }
+
+        const ccEmail = prompt("Enter CC email address (optional):");
+
+        const message = `
+        Task report submitted on ${new Date().toLocaleString()}.
+        Number of entries: ${entries.length}
+        `;
+
+        emailjs.send("service_rdyg9vk", "template_n26dxxn", {
+          to_email: toEmail,
+          cc_email: ccEmail || "",
+          message: message
+        })
+        .then(() => alert("Email sent successfully!"))
+        .catch((error) => {
+          console.error("Email send failed:", error);
+          alert("Failed to send email. See console for details.");
+        });
+      };
+
+      const downloadCSV = () => {
+        const extendedFields = [...fields, "manHoursUnit", "machineHoursUnit"];
+        const headers = extendedFields.join(",");
+        const rows = entries.map((entry) =>
+          extendedFields.map((field) =>
+            `"${String(entry[field] || "").replace(/"/g, '""')}"`).join(",")
+        );
+        const csvContent = [headers, ...rows].join("\n");
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", "data_entries.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      };
+
+      const clearAllEntries = () => {
+        if (confirm("Are you sure you want to delete all entries?")) {
+          localStorage.removeItem("entries");
+          setEntries([]);
+          alert("All entries cleared.");
+        }
+      };
+
+      const handleLogin = () => {
+        const pass = prompt("Enter operator password:");
+        if (pass === "admin123") {
+          setIsOperator(true);
+        } else {
+          alert("Incorrect password.");
+        }
+      };
+
+      return (
+        React.createElement("div", { className: "min-h-screen bg-gray-100 p-8" },
+          React.createElement("div", { className: "max-w-4xl mx-auto bg-white shadow-xl rounded-2xl p-6" },
+
+            React.createElement("div", { className: "text-center" },
+              React.createElement("h1", { className: "text-2xl font-bold mb-2" }, "Manufacturing Task Entry Form"),
+              React.createElement(DateTimeDisplay)
+            ),
+
+            React.createElement("form", { onSubmit: handleSubmit, className: "grid grid-cols-1 md:grid-cols-2 gap-4" },
+              fields.filter(field => field !== "taskType").map((field) =>
+                React.createElement("div", { key: field, className: "col-span-1 flex flex-col md:flex-row items-center gap-2" },
+                  React.createElement("label", { className: "w-48 font-bold text-gray-700" }, labelMap[field] || field),
+                  React.createElement(field === "notes" ? "textarea" : "input", {
+                    type: field === "date" ? "date" : "text",
+                    className: "flex-1 p-2 border rounded",
+                    value: formData[field] || "",
+                    onChange: (e) => handleChange(field, e.target.value)
+                  })
+                )
+              ),
+
+              React.createElement("div", { className: "col-span-full flex flex-col md:flex-row items-center gap-2" },
+                React.createElement("label", { className: "w-48 font-bold text-gray-700" }, "Task Type"),
+                React.createElement("div", { className: "flex gap-6" },
+                  ["Production Related Task", "Repair Related Task"].map((option) =>
+                    React.createElement("label", { key: option, className: "flex items-center gap-1" },
+                      React.createElement("input", {
+                        type: "radio",
+                        name: "taskType",
+                        value: option,
+                        checked: formData.taskType === option,
+                        onChange: (e) => handleChange("taskType", e.target.value)
+                      }),
+                      option
+                    )
+                  )
+                )
+              ),
+
+              React.createElement("div", { className: "col-span-1 flex flex-col md:flex-row items-center gap-2" },
+                React.createElement("label", { className: "w-48 font-bold text-gray-700" }, "Man Hours Unit"),
+                React.createElement("div", { className: "flex gap-4" },
+                  ["Hours", "Minutes"].map((unit) =>
+                    React.createElement("label", { key: unit, className: "flex items-center gap-1" },
+                      React.createElement("input", {
+                        type: "radio",
+                        name: "manHoursUnit",
+                        value: unit,
+                        checked: formData.manHoursUnit === unit,
+                        onChange: (e) => handleChange("manHoursUnit", e.target.value)
+                      }),
+                      unit
+                    )
+                  )
+                )
+              ),
+
+              React.createElement("div", { className: "col-span-1 flex flex-col md:flex-row items-center gap-2" },
+                React.createElement("label", { className: "w-48 font-bold text-gray-700" }, "Machine Hours Unit"),
+                React.createElement("div", { className: "flex gap-4" },
+                  ["Hours", "Minutes"].map((unit) =>
+                    React.createElement("label", { key: unit, className: "flex items-center gap-1" },
+                      React.createElement("input", {
+                        type: "radio",
+                        name: "machineHoursUnit",
+                        value: unit,
+                        checked: formData.machineHoursUnit === unit,
+                        onChange: (e) => handleChange("machineHoursUnit", e.target.value)
+                      }),
+                      unit
+                    )
+                  )
+                )
+              ),
+
+              React.createElement("div", { className: "col-span-full flex justify-center mt-4" },
+                React.createElement("button", {
+                  type: "submit",
+                  className: "bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                }, "Submit Entry")
+              )
+            ),
+
+            React.createElement("div", { className: "mt-8 text-center flex justify-center gap-4 flex-wrap" },
+              !isOperator && React.createElement("button", {
+                onClick: handleLogin,
+                className: "bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700"
+              }, "Operator Login"),
+
+              isOperator && entries.length > 0 && [
+                React.createElement("button", {
+                  onClick: downloadCSV,
+                  className: "bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+                }, "Download CSV"),
+
+                React.createElement("button", {
+                  onClick: clearAllEntries,
+                  className: "bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+                }, "Clear Entries"),
+
+                React.createElement("button", {
+                  onClick: sendSummaryByEmail,
+                  className: "bg-yellow-600 text-white px-4 py-2 rounded hover:bg-yellow-700"
+                }, "Send Summary by Email"),
+
+                React.createElement("button", {
+                  onClick: () => {
+                    if (confirm("Log out as operator?")) setIsOperator(false);
+                  },
+                  className: "bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
+                }, "Log Out")
+              ]
+            )
+          )
+        )
+      );
+    }
+
+    ReactDOM.render(React.createElement(DataEntryForm), document.getElementById("root"));
+  </script>
+</body>
+</html>
